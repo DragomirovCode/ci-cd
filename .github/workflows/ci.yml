@@ -17,13 +17,26 @@ jobs:
       - name: Validate MR title by convention
         env:
           MR_TITLE: ${{ github.event.pull_request.title }}
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
         run: |
-          if [[ ! "$MR_TITLE" =~ ^[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*(feature|fix|chore|refactor|docs|perf)[[:space:]]*\|[[:space:]]*#[0-9]+[[:space:]]*-[[:space:]]+.+$ ]]; then
-            echo "❌ Invalid MR title: $MR_TITLE"
-            echo "Example: backend | user-auth | feature | #1234 - implement JWT login"
-            exit 1
+          echo "DEBUG: MR_TITLE='$MR_TITLE'"
+          STANDARD_REGEX='^[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*(feature|fix|chore|refactor|docs|perf)[[:space:]]*\|[[:space:]]*#[0-9]+[[:space:]]*-[[:space:]]+.+$'
+          RELEASE_REGEX='^release[[:space:]]*\|[[:space:]]*[a-zA-Z0-9._-]+[[:space:]]*\|[[:space:]]*#[0-9]+[[:space:]]*-[[:space:]]+.+$'
+          if [[ "$TARGET_BRANCH" == "master" || "$TARGET_BRANCH" =~ ^release/? ]]; then
+            if [[ ! "$MR_TITLE" =~ $RELEASE_REGEX ]]; then
+              echo "❌ Invalid release PR title: $MR_TITLE"
+              echo "Example: release | 1.2.0 | #52 - Release Description"
+              exit 1
+            fi
+            echo "✔ Release PR title is valid: $MR_TITLE"
+          else
+            if [[ ! "$MR_TITLE" =~ $STANDARD_REGEX ]]; then
+              echo "❌ Invalid PR title: $MR_TITLE"
+              echo "Example: backend | user-auth | feature | #1234 - implement JWT login"
+              exit 1
+            fi
+            echo "✔ PR title is valid: $MR_TITLE"
           fi
-          echo "✔ MR title is valid: $MR_TITLE"
 
       - name: Upload source as artifact
         uses: actions/upload-artifact@v4

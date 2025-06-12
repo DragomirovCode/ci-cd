@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - "master"
+      - "develop"
+      - "release/*"
+  push:
+    branches:
+      - "master"
+      - "develop"
+      - "release/*"
+  workflow_dispatch:
+
+jobs:
+  check-mr-naming:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate MR title by convention
+        env:
+          MR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Проверяем, что заголовок MR соответствует шаблону
+          # <area> | <module> | <type> | #<issue> - <description>
+          # Пример: backend | user-auth | feature | #1234 - implement JWT login
+          if [[ ! "$MR_TITLE" =~ ^[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*(feature|fix|chore)[[:space:]]*\|[[:space:]]*#[0-9]+[[:space:]]*-[[:space:]]+.+$ ]]; then
+            echo "❌ Invalid MR title: $MR_TITLE"
+            echo "Example: backend | user-auth | feature | #1234 - implement JWT login"
+            exit 1
+          fi
+          echo "✔ MR title is valid: $MR_TITLE"
+
+  lint-build-test:
+    runs-on: ubuntu-latest
+    needs: [check-mr-naming]
+    if: (github.event_name == 'pull_request') || (github.event_name == 'push')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Линтер (ktlint)
+      - name: Run linter (ktlint)
+        run: ./gradlew ktlintCheck
+
+      # Статический анализ (detekt)
+      - name: Run static analysis (detekt)
+        run: ./gradlew detekt
+
+      # Проверка орфографии (русский + английский)
+      - name: Run spellcheck (yaspeller)
+        run: |
+          npm install -g yaspeller
+          yaspeller --lang ru,en --ignore-uppercase --file-extensions ".kt,.kts,.md,.txt" .
+
+      # Сборка
+      - name: Build with Gradle
+        run: ./gradlew build --no-daemon
+
+      # Тесты
+      - name: Run tests
+        run: ./gradlew test --no-daemon

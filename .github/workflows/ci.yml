@@ -13,11 +13,11 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Validate MR title by convention
         env:
           MR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          # Проверяем шаблон MR: <area> | <module> | <type> | #<issue> - <description>
           if [[ ! "$MR_TITLE" =~ ^[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*[a-zA-Z0-9_-]+[[:space:]]*\|[[:space:]]*(feature|fix|chore|refactor|docs|perf)[[:space:]]*\|[[:space:]]*#[0-9]+[[:space:]]*-[[:space:]]+.+$ ]]; then
             echo "❌ Invalid MR title: $MR_TITLE"
             echo "Example: backend | user-auth | feature | #1234 - implement JWT login"
@@ -35,17 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-mr-naming
     steps:
-      - name: Download source
-        uses: actions/download-artifact@v4
-        with:
-          name: source
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
+      - uses: ./.github/actions/shared-setup
       - name: Run linter (ktlint)
         run: ./gradlew ktlintCheck
 
@@ -53,17 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-mr-naming
     steps:
-      - name: Download source
-        uses: actions/download-artifact@v4
-        with:
-          name: source
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
+      - uses: ./.github/actions/shared-setup
       - name: Run static analysis (detekt)
         run: ./gradlew detekt
 
@@ -71,11 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-mr-naming
     steps:
-      - name: Download source
-        uses: actions/download-artifact@v4
-        with:
-          name: source
-
+      - uses: ./.github/actions/shared-setup
       - name: Run spellcheck (yaspeller)
         run: |
           npm install -g yaspeller
@@ -85,40 +61,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, static-analysis, spellcheck]
     steps:
-      - name: Download source
-        uses: actions/download-artifact@v4
-        with:
-          name: source
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
+      - uses: ./.github/actions/shared-setup
       - name: Build with Gradle
         run: ./gradlew build --no-daemon
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
-          path: build/libs
+          path: |
+            build/libs/**/*.jar
+            build/libs/**/*.war
 
   test:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Download source
+      # Shared setup (исходный код) и скачивание build-артефактов
+      - uses: ./.github/actions/shared-setup
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: source
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
+          name: build-artifacts
+          path: ./build/libs
       - name: Run tests
         run: ./gradlew test --no-daemon
